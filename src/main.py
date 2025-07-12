@@ -137,6 +137,9 @@ def fill_metadata_body(sheet, model_fields_dict, base_row=10):
 
 
 from openpyxl.workbook.defined_name import DefinedName
+from openpyxl.utils.cell import coordinate_from_string, column_index_from_string, get_column_letter
+import re
+from collections import defaultdict
 
 def assign_named_ranges(wb):
     tag_pattern = re.compile(r'^G(\d)(\d{2})$')
@@ -156,7 +159,7 @@ def assign_named_ranges(wb):
                         tag_name = f"XDO_?XDOFIELD{model}{field_num}?"
                         group_key = f"G{model}"
 
-                        # Точное местоположение: абсолютный адрес
+                        # ❌ НЕ добавляем кавычки вокруг имени листа
                         cell_ref = f"{sheet.title}!${cell.column_letter}${cell.row}"
 
                         # Добавим имя для этой ячейки
@@ -167,12 +170,10 @@ def assign_named_ranges(wb):
                         grouped_cells[group_key].append(cell_ref)
 
     # Групповые XDO_GROUP_?XDOGx?
-    from openpyxl.utils.cell import coordinate_from_string, column_index_from_string, get_column_letter
     for group_name, refs in grouped_cells.items():
         model_index = group_name[1:]
         group_tag = f"XDO_GROUP_?XDOG{model_index}?"
 
-        # Преобразуем координаты
         rows = []
         cols = []
 
@@ -184,15 +185,18 @@ def assign_named_ranges(wb):
             rows.append(int(row))
             cols.append(col_idx)
 
-        # Прямоугольная область
         min_col = get_column_letter(min(cols))
         max_col = get_column_letter(max(cols))
         min_row = min(rows)
         max_row = max(rows)
 
-        range_ref = f"{sheet_name}!${min_col}${min_row}:${max_col}${max_row}"
+        # ✅ Кавычки ТОЛЬКО для имен листов с пробелами (для диапазонов)
+        quoted_sheet_name = f"'{sheet_name}'" if ' ' in sheet_name else sheet_name
+        range_ref = f"{quoted_sheet_name}!${min_col}${min_row}:${max_col}${max_row}"
+
         defined_name = DefinedName(name=group_tag, attr_text=range_ref)
         wb.defined_names.add(defined_name)
+
 
 
 

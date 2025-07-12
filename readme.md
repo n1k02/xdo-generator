@@ -13,5 +13,12 @@ Easily create your XDO executable with a single command!
 
 After the process completes, you'll find your `xdo_generator.exe` in the `dist` folder.
 
+
+### How use
+
+- put your sql codes of models in txt files: `G1.txt`, `G2.txt`... 
+- rename your xlsx file to `template.xlsx`
+- run xdo_generator.exe to create xls template 
+
 ---
 
