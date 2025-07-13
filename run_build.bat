@@ -1,0 +1,1 @@
+pyinstaller --onefile --name xdo_generator src/main.py
