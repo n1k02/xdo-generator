@@ -14,11 +14,15 @@ Easily create your XDO executable with a single command!
 After the process completes, you'll find your `xdo_generator.exe` in the `dist` folder.
 
 
-### How use
+### Usage
 
-- put your sql codes of models in txt files: `G1.txt`, `G2.txt`... 
-- rename your xlsx file to `template.xlsx`
-- run xdo_generator.exe to create xls template 
+1. Place `xdo_generator.exe` in the root directory of your project.
+2. Add your SQL model code to text files named `G1.txt`, `G2.txt`, etc.
+3. Rename your Excel file to `template.xlsx`.
+4. Run `xdo_generator.exe` to generate the xls template.
+
+> Alternatively, you can run `main.py` directly with Python.  
+> Make sure to install all required dependencies first.
 
 ---
 
