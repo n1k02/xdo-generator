@@ -1,8 +1,15 @@
-from openpyxl import Workbook
-
+import os
 import re
-from openpyxl import load_workbook
 from collections import defaultdict
+from openpyxl import load_workbook
+from openpyxl.workbook.defined_name import DefinedName
+from openpyxl.utils.cell import (
+    coordinate_from_string,
+    column_index_from_string,
+    get_column_letter
+)
+import win32com.client as win32 
+
 
 models_folder_name = "."
 
@@ -30,7 +37,7 @@ def create_xdo_metadata_sheet(wb):
 
 def find_tagged_cells(file_path):
     wb = load_workbook(file_path)
-    tag_pattern = re.compile(r'^G(\d)(\d{2})$')  # G1XX, G2XX и т.д.
+    tag_pattern = re.compile(r'^G(\d)(\d{2})$')  # G1XX, G2XX, etc.
     model_fields = defaultdict(list)
 
     for sheet in wb.worksheets:
@@ -45,14 +52,11 @@ def find_tagged_cells(file_path):
                         model_number = match.group(1)
                         field_number = match.group(2)
                         model_key = f'G{model_number}'
-                        global_field_num = int(model_number + field_number)  # например 101, 202 и т.д.
+                        global_field_num = int(model_number + field_number)
                         model_fields[model_key].append(global_field_num)
 
     return model_fields
 
-
-
-import re
 
 def split_sql_fields(sql):
     fields = []
@@ -75,17 +79,14 @@ def split_sql_fields(sql):
     return fields
 
 def extract_field_alias(field_expr):
-    # Попробуем найти алиас через AS
     as_match = re.search(r'\s+AS\s+("?\w+"?)$', field_expr, re.IGNORECASE)
     if as_match:
         return as_match.group(1).replace('"', '')
 
-    # Если нет AS, но это table.field
     dot_match = re.search(r'(\w+)\.(\w+)$', field_expr)
     if dot_match:
         return dot_match.group(2)
 
-    # Иначе пробуем взять последнее слово
     tokens = re.findall(r'\w+', field_expr)
     if tokens:
         return tokens[-1]
@@ -104,11 +105,10 @@ def parse_field_names_from_txt(file_path):
 def fill_metadata_body(sheet, model_fields_dict, base_row=10):
     current_row = base_row
 
-    for group_name in sorted(model_fields_dict.keys()):  # G1, G2 и т.д.
-        model_index = int(group_name[1:])  # 1, 2, ...
-        tag_ids = sorted(model_fields_dict[group_name])  # [101, 102, 103, ...]
+    for group_name in sorted(model_fields_dict.keys()):
+        model_index = int(group_name[1:])
+        tag_ids = sorted(model_fields_dict[group_name])
 
-        # читаем файл G1.txt → ['field1', 'field2', ...]
         txt_file_path = f"{models_folder_name}/{group_name}.txt"
         field_names = parse_field_names_from_txt(txt_file_path)
 
@@ -127,7 +127,6 @@ def fill_metadata_body(sheet, model_fields_dict, base_row=10):
             sheet.cell(row=current_row, column=2).value = value
             current_row += 1
 
-        # добавим XDO_GROUP_?XDOGx?
         group_tag = f"XDO_GROUP_?XDOG{model_index}?"
         loop_value = f"<xsl:for-each select=\".//G_{model_index}\">"
         sheet.cell(row=current_row, column=1).value = group_tag
@@ -136,10 +135,6 @@ def fill_metadata_body(sheet, model_fields_dict, base_row=10):
         current_row += 1
 
 
-from openpyxl.workbook.defined_name import DefinedName
-from openpyxl.utils.cell import coordinate_from_string, column_index_from_string, get_column_letter
-import re
-from collections import defaultdict
 
 def assign_named_ranges(wb):
     tag_pattern = re.compile(r'^G(\d)(\d{2})$')
@@ -166,7 +161,6 @@ def assign_named_ranges(wb):
 
                         grouped_cells[group_key].append(cell_ref)
 
-    # Групповые XDO_GROUP_?XDOGx?
     for group_name, refs in grouped_cells.items():
         model_index = group_name[1:]
         group_tag = f"XDO_GROUP_?XDOG{model_index}?"
@@ -193,31 +187,23 @@ def assign_named_ranges(wb):
         wb.defined_names.add(defined_name)
 
 
-
-
-
-import win32com.client as win32
-import os
-
 def convert_xlsx_to_xls(input_path, output_path):
-    # Удалим старый .xls, если есть
     if os.path.exists(output_path):
         try:
             os.remove(output_path)
         except PermissionError:
-            print(f"❌ Невозможно удалить файл {output_path}. Он, возможно, открыт.")
+            print(f"❌ Cannot delete file {output_path}. It may be open.")
             return
 
     excel = win32.gencache.EnsureDispatch('Excel.Application')
-    excel.DisplayAlerts = False  # 💡 отключает все всплывающие окна Excel
+    excel.DisplayAlerts = False
     wb = excel.Workbooks.Open(os.path.abspath(input_path))
-    wb.SaveAs(os.path.abspath(output_path), FileFormat=56)  # 56 = .xls
+    wb.SaveAs(os.path.abspath(output_path), FileFormat=56)
     wb.Close(False)
     excel.Quit()
-    print(f"✅ Сохранено как .xls: {output_path}")
+    print(f"✅ Saved as .xls: {output_path}")
 
 
-# Получим теги с координатами из книги
 def find_tagged_sheets(wb):
     tag_pattern = re.compile(r'^G(\d)(\d{2})$')
     tagged_sheets = set()
@@ -229,7 +215,7 @@ def find_tagged_sheets(wb):
             for cell_value in row:
                 if isinstance(cell_value, str) and tag_pattern.match(cell_value.strip()):
                     tagged_sheets.add(sheet.title)
-                    break  # достаточно одного совпадения
+                    break
     return tagged_sheets
 
 def find_tagged_cells_from_workbook(wb):
@@ -253,8 +239,24 @@ def find_tagged_cells_from_workbook(wb):
 
     return model_fields
 
+def find_first_empty_row_after_constraints(sheet):
+    row_with_constraints = None
 
-import os
+    for row in range(1, sheet.max_row + 1):
+        value = sheet.cell(row=row, column=1).value
+        if isinstance(value, str) and "Data Constraints:" in value:
+            row_with_constraints = row
+            break
+
+    if row_with_constraints is None:
+        raise ValueError("⛔ 'Data Constraints:' row not found in XDO_METADATA sheet")
+
+    row = row_with_constraints + 1
+    while sheet.cell(row=row, column=1).value is not None:
+        row += 1
+
+    return row
+
 
 def main():
     template_path = "template.xlsx"
@@ -262,27 +264,36 @@ def main():
 
     tagged_sheets = find_tagged_sheets(wb)
 
-    # 🔁 Переименуем только те листы, которые содержат G-теги
-    sheet_renames = {}  # old → new
     for sheet in wb.worksheets:
         if sheet.title in tagged_sheets and ' ' in sheet.title:
             old_title = sheet.title
             new_title = sheet.title.replace(' ', '_')
             sheet.title = new_title
-            sheet_renames[old_title] = new_title
-            print(f"ℹ️ Переименован лист: '{old_title}' → '{new_title}'")
+            print(f"ℹ️ Renamed sheet: '{old_title}' → '{new_title}'")
 
     model_fields_dict = find_tagged_cells_from_workbook(wb)
 
-    print("🔍 Найденные модели и поля:")
+    print("🔍 Found models and fields:")
     for group, tags in model_fields_dict.items():
         print(f"  {group}: {tags}")
 
     if "XDO_METADATA" in wb.sheetnames:
-        del wb["XDO_METADATA"]
-    metadata_sheet = create_xdo_metadata_sheet(wb)
+        sheet = wb["XDO_METADATA"]
+        next_row = find_first_empty_row_after_constraints(sheet)
+        if next_row is not None:
+            metadata_sheet = sheet
+            print("ℹ️ Found 'Data Constraints:' in XDO_METADATA. Appending new entries.")
+        else:
+            del wb["XDO_METADATA"]
+            metadata_sheet = create_xdo_metadata_sheet(wb)
+            print("⚠️ 'Data Constraints:' not found in XDO_METADATA. Sheet recreated.")
+            next_row = 11
+    else:
+        metadata_sheet = create_xdo_metadata_sheet(wb)
+        print("ℹ️ XDO_METADATA sheet created from scratch.")
+        next_row = 11
 
-    fill_metadata_body(metadata_sheet, model_fields_dict)
+    fill_metadata_body(metadata_sheet, model_fields_dict, base_row=next_row)
     assign_named_ranges(wb)
 
     xlsx_path = "temp.xlsx"
@@ -293,7 +304,7 @@ def main():
             os.remove(xlsx_path)
         wb.save(xlsx_path)
     except PermissionError:
-        print(f"❌ Невозможно удалить или сохранить файл {xlsx_path}. Он, возможно, открыт.")
+        print(f"❌ Cannot delete or save file {xlsx_path}. It may be open.")
         return
 
     convert_xlsx_to_xls(xlsx_path, xls_path)
@@ -301,10 +312,9 @@ def main():
     try:
         os.remove(xlsx_path)
     except PermissionError:
-        print(f"❌ Не удалось удалить временный файл {xlsx_path}. Он, возможно, открыт.")
+        print(f"❌ Could not delete temporary file {xlsx_path}. It may be open.")
 
-    print(f"✅ Готово: {xls_path}")
-
+    print(f"✅ Done: {xls_path}")
 
 
 if __name__ == "__main__":
