@@ -159,14 +159,11 @@ def assign_named_ranges(wb):
                         tag_name = f"XDO_?XDOFIELD{model}{field_num}?"
                         group_key = f"G{model}"
 
-                        # ❌ НЕ добавляем кавычки вокруг имени листа
                         cell_ref = f"{sheet.title}!${cell.column_letter}${cell.row}"
 
-                        # Добавим имя для этой ячейки
                         defined_name = DefinedName(name=tag_name, attr_text=cell_ref)
                         wb.defined_names.add(defined_name)
 
-                        # Добавим в группу
                         grouped_cells[group_key].append(cell_ref)
 
     # Групповые XDO_GROUP_?XDOGx?
@@ -190,12 +187,11 @@ def assign_named_ranges(wb):
         min_row = min(rows)
         max_row = max(rows)
 
-        # ✅ Кавычки ТОЛЬКО для имен листов с пробелами (для диапазонов)
-        quoted_sheet_name = f"'{sheet_name}'" if ' ' in sheet_name else sheet_name
-        range_ref = f"{quoted_sheet_name}!${min_col}${min_row}:${max_col}${max_row}"
+        range_ref = f"{sheet_name}!${min_col}${min_row}:${max_col}${max_row}"
 
         defined_name = DefinedName(name=group_tag, attr_text=range_ref)
         wb.defined_names.add(defined_name)
+
 
 
 
@@ -221,6 +217,41 @@ def convert_xlsx_to_xls(input_path, output_path):
     print(f"✅ Сохранено как .xls: {output_path}")
 
 
+# Получим теги с координатами из книги
+def find_tagged_sheets(wb):
+    tag_pattern = re.compile(r'^G(\d)(\d{2})$')
+    tagged_sheets = set()
+
+    for sheet in wb.worksheets:
+        if sheet.title == "XDO_METADATA":
+            continue
+        for row in sheet.iter_rows(values_only=True):
+            for cell_value in row:
+                if isinstance(cell_value, str) and tag_pattern.match(cell_value.strip()):
+                    tagged_sheets.add(sheet.title)
+                    break  # достаточно одного совпадения
+    return tagged_sheets
+
+def find_tagged_cells_from_workbook(wb):
+    tag_pattern = re.compile(r'^G(\d)(\d{2})$')
+    model_fields = defaultdict(list)
+
+    for sheet in wb.worksheets:
+        if sheet.title == "XDO_METADATA":
+            continue
+
+        for row in sheet.iter_rows(values_only=True):
+            for cell_value in row:
+                if isinstance(cell_value, str):
+                    match = tag_pattern.match(cell_value.strip())
+                    if match:
+                        model_number = match.group(1)
+                        field_number = match.group(2)
+                        model_key = f'G{model_number}'
+                        global_field_num = int(model_number + field_number)
+                        model_fields[model_key].append(global_field_num)
+
+    return model_fields
 
 
 import os
@@ -228,7 +259,20 @@ import os
 def main():
     template_path = "template.xlsx"
     wb = load_workbook(template_path)
-    model_fields_dict = find_tagged_cells(template_path)
+
+    tagged_sheets = find_tagged_sheets(wb)
+
+    # 🔁 Переименуем только те листы, которые содержат G-теги
+    sheet_renames = {}  # old → new
+    for sheet in wb.worksheets:
+        if sheet.title in tagged_sheets and ' ' in sheet.title:
+            old_title = sheet.title
+            new_title = sheet.title.replace(' ', '_')
+            sheet.title = new_title
+            sheet_renames[old_title] = new_title
+            print(f"ℹ️ Переименован лист: '{old_title}' → '{new_title}'")
+
+    model_fields_dict = find_tagged_cells_from_workbook(wb)
 
     print("🔍 Найденные модели и поля:")
     for group, tags in model_fields_dict.items():
