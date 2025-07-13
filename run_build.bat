@@ -1,1 +1,6 @@
+@echo off
+echo Installing dependencies & build tools...
+pip install -r requirements.txt
+
+echo Building executable...
 pyinstaller --onefile --name xdo_generator src/main.py
