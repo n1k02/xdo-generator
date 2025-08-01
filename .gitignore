@@ -1,4 +1,2 @@
-*.xls
-!XDO_METADATA example.xls
 /dist
 /build
